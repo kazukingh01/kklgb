@@ -1,3 +1,18 @@
+Metadata-Version: 2.1
+Name: kklgb
+Version: 1.0.0
+Summary: lightgbm wrapper library.
+Home-page: https://github.com/kazukingh01/kklgb
+Author: kazuking
+Author-email: kazukingh01@gmail.com
+License: Public License
+Platform: UNKNOWN
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: Private License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.7
+Description-Content-Type: text/markdown
+
 # kklgb
 - This package is wrapper package for lightgbm( https://github.com/microsoft/LightGBM ).
 - You can do training with some useful functions. 
@@ -38,3 +53,4 @@ tensor([[0.0000, 0.0621, 0.0000, 0.4308, 0.0000, 0.0000, 0.0000, 0.0000],
         [0.0000, 0.0377, 0.0000, 0.1924, 0.0000, 0.0000, 0.0788, 0.0000]],
         grad_fn=<ReluBackward0>)
 ```
+
