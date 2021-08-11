@@ -5,11 +5,12 @@ import numpy as np
 from sklearn.exceptions import NotFittedError
 
 import lightgbm as lgb
-from lightgbm import LGBMClassifier, LGBMRegressor, LGBMModel, Dataset
+from lightgbm import LGBMClassifier, LGBMRegressor, LGBMModel, Booster, Dataset
 from lightgbm.callback import record_evaluation
 
 # local package
 from kklgb.loss import Loss
+from kklgb.util.functions import softmax
 from kklgb.util.lgbm import LGBCustomObjective, LGBCustomEval, calc_grad_hess
 from kklgb.util.callbacks import callback_model_save, callback_stop_training, callback_best_iter, callback_lr_schedule, print_evaluation
 from kklgb.util.com import check_type_list
@@ -131,6 +132,12 @@ class KkLGBMRegressor(LGBMRegressor, KkLGBMModelBase):
         super()._fit(X, y, *argv, **kwargs)
     def fit_common(self, X, y, *argv, **kwargs):
         super().fit(X, y, *argv, **kwargs)
+
+
+class KkBooster(Booster):
+    def predict_proba(self, data, *args, **kwargs):
+        output = self.predict(data, *args, **kwargs)
+        return softmax(output)
 
 
 class KkLgbDataset(Dataset):
@@ -297,5 +304,6 @@ def train(
         func_train=lgb.train,
         **kwargs
     )
+    obj.__class__ = KkBooster
     logger.info("END")
     return obj

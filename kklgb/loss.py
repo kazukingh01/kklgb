@@ -6,8 +6,9 @@ from kklgb.util.functions import sigmoid, softmax
 
 __all__ = [
     "Loss",
-    "BinaryClossEntropyLoss",
-    "CategoricalClossEntropyLoss",
+    "BinaryCrossEntropyLoss",
+    "CrossEntropyLoss",
+    "CategoricalCrossEntropyLoss",
     "FocalLoss",
     "MSELoss",
     "MAELoss",
@@ -53,7 +54,7 @@ class Loss:
         raise NotImplementedError
 
 
-class BinaryClossEntropyLoss(Loss):
+class BinaryCrossEntropyLoss(Loss):
     def __init__(self, dx: float=1e-5):
         super().__init__("bce", n_classes=1, target_dtype=np.int32, is_higher_better=False)
         self.dx = dx
@@ -74,21 +75,23 @@ class BinaryClossEntropyLoss(Loss):
         return grad, hess
 
 
-class CategoricalClossEntropyLoss(Loss):
-    def __init__(self, n_classes: int, dx: float=1e-5):
+class CrossEntropyLoss(Loss):
+    def __init__(self, n_classes: int, dx: float=1e-5, target_dtype: np.dtype=np.float32):
         assert isinstance(n_classes, int) and n_classes > 1
-        super().__init__("ce", n_classes=n_classes, target_dtype=np.int32, is_higher_better=False)
+        super().__init__("ce", n_classes=n_classes, target_dtype=target_dtype, is_higher_better=False)
         self.dx = dx
     def check(self, x: np.ndarray, t: np.ndarray):
         super().check(x, t)
-        assert len(x.shape) == 2
-        assert np.isin(np.unique(t), np.arange(self.n_classes)).sum() == self.n_classes
+        if self.name == "ce":
+            assert len(x.shape) == 2
+            assert len(t.shape) == 2
+            assert x.shape[1] == t.shape[1] == self.n_classes
+            assert ((t.sum(axis=1) / self.dx).round(0).astype(np.int32) == int(round(1 / self.dx, 0))).sum() == t.shape[0]
     def loss(self, x: np.ndarray, t: np.ndarray):
         x, t = self.convert(x, t)
         x = softmax(x)
         x = np.clip(x, self.dx, 1 - self.dx * (self.n_classes - 1))
-        t = np.identity(x.shape[1])[t].astype(bool)
-        return -1 * np.log(x[t])
+        return (-1 * t * np.log(x)).sum(axis=1)
     def gradhess(self, x: np.ndarray, t: np.ndarray):
         """
         see: https://qiita.com/klis/items/4ad3032d02ff815e09e6
@@ -97,10 +100,29 @@ class CategoricalClossEntropyLoss(Loss):
         x, t = self.convert(x, t)
         x = softmax(x)
         x = np.clip(x, self.dx, 1 - self.dx * (self.n_classes - 1))
-        t = np.identity(x.shape[1])[t].astype(bool)
-        grad = x - t.astype(np.float32)
+        grad = x - t
         hess = x * (1 - x)
         return grad, hess
+
+
+class CategoricalCrossEntropyLoss(CrossEntropyLoss):
+    def __init__(self, n_classes: int, dx: float=1e-5, smoothing: float=False):
+        assert (isinstance(smoothing, bool) and smoothing == False) or (isinstance(smoothing, float) and 0.0 < smoothing < 1.0)
+        super().__init__(n_classes, dx=dx, target_dtype=np.int32)
+        self.name      = "cce"
+        self.smoothing = smoothing
+    def check(self, x: np.ndarray, t: np.ndarray):
+        super().check(x, t)
+        assert len(x.shape) == 2
+        assert np.isin(np.unique(t), np.arange(self.n_classes)).sum() == self.n_classes
+    def convert(self, x: np.ndarray, t: np.ndarray):
+        x, t = super().convert(x, t)
+        t = np.identity(x.shape[1])[t].astype(np.float32)
+        if self.smoothing > 0.0:
+            ndf = np.full(x.shape, self.smoothing / (self.n_classes - 1))
+            ndf[t.astype(bool)] = 1 - self.smoothing
+            t = ndf.astype(np.float32)
+        return x, t
 
 
 class FocalLoss(Loss):
@@ -193,10 +215,17 @@ class Accuracy(Loss):
         assert isinstance(top_k, int) and top_k >= 1
         self.top_k = top_k
         super().__init__(f"acc_top{self.top_k}", n_classes=0, target_dtype=np.float32, is_higher_better=True)
+        self.conv_shape_t = lambda x: x
     def check(self, x: np.ndarray, t: np.ndarray):
         super().check(x, t)
         assert len(x.shape) == 2
-        assert len(t.shape) == 1
+        assert len(t.shape) in [1, 2]
+        if len(t.shape) == 2:
+            self.conv_shape_t = lambda x: np.argmax(x, axis=1)
+    def convert(self, x: np.ndarray, t: np.ndarray):
+        x, t = super().convert(x, t)
+        t = self.conv_shape_t(t)
+        return x, t
     def loss(self, x: np.ndarray, t: np.ndarray):
         x, t = self.convert(x, t)
         x = np.argsort(x, axis=1)[:, ::-1]
