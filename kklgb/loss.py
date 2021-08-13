@@ -80,13 +80,16 @@ class CrossEntropyLoss(Loss):
         assert isinstance(n_classes, int) and n_classes > 1
         super().__init__("ce", n_classes=n_classes, target_dtype=target_dtype, is_higher_better=False)
         self.dx = dx
+        self.conv_t_sum = lambda x: 1.0
     def check(self, x: np.ndarray, t: np.ndarray):
         super().check(x, t)
         if self.name == "ce":
             assert len(x.shape) == 2
             assert len(t.shape) == 2
             assert x.shape[1] == t.shape[1] == self.n_classes
-            assert ((t.sum(axis=1) / self.dx).round(0).astype(np.int32) == int(round(1 / self.dx, 0))).sum() == t.shape[0]
+            if ((t.sum(axis=1) / self.dx).round(0).astype(np.int32) == int(round(1 / self.dx, 0))).sum() != t.shape[0]:
+                # If the sum of "t" is not equal to 1 (In other words, if "t" is not a probability)
+                self.conv_t_sum = lambda x: x.sum(axis=1).reshape(-1, 1)
     def loss(self, x: np.ndarray, t: np.ndarray):
         x, t = self.convert(x, t)
         x = softmax(x)
@@ -100,8 +103,9 @@ class CrossEntropyLoss(Loss):
         x, t = self.convert(x, t)
         x = softmax(x)
         x = np.clip(x, self.dx, 1 - self.dx * (self.n_classes - 1))
-        grad = x - t
-        hess = x * (1 - x)
+        t_sum = self.conv_t_sum(t)
+        grad  = t_sum * x - t
+        hess  = t_sum * x * (1 - x)
         return grad, hess
 
 
