@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Union
 from lightgbm.callback import EarlyStopException, _format_eval_result
 from kklgb.util.logger import MyLogger
 
@@ -31,26 +31,33 @@ def callback_stop_training(stopping_val: float, stopping_rounds: int, logger: My
     _callback.order = 150
     return _callback
 
-def callback_best_iter(dict_eval: dict, stopping_rounds: int, logger: MyLogger):
+def callback_best_iter(dict_eval: dict, stopping_rounds: int, name: Union[str, int], logger: MyLogger):
     """
-    Determine best iteration for valid_1
+    Determine best iteration for valid0
     """
     def _init(env):
         dict_eval["best_iter"]  = 0
         dict_eval["eval_name"]  = ""
-        dict_eval["best_score"] = float("inf")
+        dict_eval["best_score"] = None
         dict_eval["best_result_list"] = []
     def _callback(env):
         if not dict_eval:
             _init(env)
-        for data_name, eval_name, result, _ in env.evaluation_result_list:
-            if data_name == "valid_1":
-                if dict_eval["best_score"] > result:
-                    dict_eval["best_score"] = result
-                    dict_eval["eval_name"]  = eval_name
-                    dict_eval["best_iter"]  = env.iteration
-                    dict_eval["best_result_list"] = env.evaluation_result_list
-                break
+        count = -1
+        for data_name, eval_name, result, is_higher_better in env.evaluation_result_list:
+            if data_name == "valid0":
+                count += 1
+                if eval_name == name:
+                    if dict_eval["best_score"] is None:
+                        dict_eval["best_score"] = result
+                    else:
+                        boolwk = result > dict_eval["best_score"] if is_higher_better else dict_eval["best_score"] > result
+                        if boolwk:
+                            dict_eval["best_score"] = result
+                            dict_eval["eval_name"]  = eval_name
+                            dict_eval["best_iter"]  = env.iteration
+                            dict_eval["best_result_list"] = env.evaluation_result_list
+                    break
         if isinstance(stopping_rounds, int) and env.iteration - dict_eval["best_iter"] >= stopping_rounds:
             logger.info(f'early stopping. iteration: {dict_eval["best_iter"]}, score: {dict_eval["best_score"]}')
             raise EarlyStopException(dict_eval["best_iter"], dict_eval["best_result_list"])

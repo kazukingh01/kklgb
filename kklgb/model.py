@@ -134,9 +134,20 @@ class KkLGBMRegressor(LGBMRegressor, KkLGBMModelBase):
         super().fit(X, y, *argv, **kwargs)
 
 
-class KkBooster(Booster):
+class KkBooster:
+    def __init__(self):
+        self.booster = None
+    def fit(self, *args, **kwargs):
+        self.booster = train(*args, **kwargs)
+        self.set_parameter_after_training()
+    def set_parameter_after_training(self):
+        self.feature_importances_ = self.booster.feature_importance()
+        if self.booster.params.get("num_class") is not None:
+            self.classes_ = np.arange(self.booster.params.get("num_class"))
+    def predict(self, data, *args, **kwargs):
+        return self.booster.predict(data, *args, **kwargs)
     def predict_proba(self, data, *args, **kwargs):
-        output = self.predict(data, *args, **kwargs)
+        output = self.booster.predict(data, *args, **kwargs)
         return softmax(output)
 
 
@@ -155,7 +166,7 @@ class KkLgbDataset(Dataset):
 
 def set_callbacks(
     kwargs: dict, logger: MyLogger, dict_eval: dict, 
-    early_stopping_rounds: int=None, dict_eval_best: dict=None,
+    early_stopping_rounds: int=None, eval_name: Union[int, str]=0, dict_eval_best: dict=None,
     stopping_train_val: float=None, stopping_train_iter: int=None,
     save_interval: int=None
 ):
@@ -168,15 +179,15 @@ def set_callbacks(
             print_evaluation(logger),
         ]
         if isinstance(early_stopping_rounds, int) and isinstance(dict_eval_best, dict):
-            logger.info("set callbacks: callback_best_iter")
-            kwargs["callbacks"].append(callback_best_iter(dict_eval_best, early_stopping_rounds, logger))
+            logger.info(f"set callbacks: callback_best_iter. params: early_stopping_rounds={early_stopping_rounds}, eval_name={eval_name}")
+            kwargs["callbacks"].append(callback_best_iter(dict_eval_best, early_stopping_rounds, eval_name, logger))
         if isinstance(stopping_train_val, float) and isinstance(stopping_train_iter, dict):
-            logger.info("set callbacks: callback_stop_training")
+            logger.info(f"set callbacks: callback_stop_training. params: stopping_train_val={stopping_train_val}, stopping_train_iter={stopping_train_iter}")
             kwargs["callbacks"].append(callback_stop_training(stopping_train_val, stopping_train_iter, logger))
         if isinstance(save_interval, float):
             logger.info("set callbacks: callback_model_save")
             kwargs["callbacks"].append(callback_model_save(save_interval))
-    for x in ["save_interval", "stopping_train_val", "stopping_train_iter"]:
+    for x in ["save_interval", "stopping_train_val", "stopping_train_iter", "early_stopping_rounds", "early_stopping_name"]:
         if kwargs.get(x) is not None: del kwargs[x]
     return kwargs
 
@@ -274,7 +285,8 @@ def _train(
     dict_eval, dict_eval_best = {}, {}
     kwargs = set_callbacks(
         kwargs, logger, dict_eval, 
-        early_stopping_rounds=kwargs.get("early_stopping_rounds"), dict_eval_best=dict_eval_best,
+        early_stopping_rounds=kwargs.get("early_stopping_rounds"), eval_name=kwargs.get("early_stopping_name"), 
+        dict_eval_best=dict_eval_best,
         stopping_train_val=kwargs.get("stopping_train_val"), stopping_train_iter=kwargs.get("stopping_train_iter"),
         save_interval=kwargs.get("save_interval"),
     )
@@ -304,6 +316,9 @@ def train(
         func_train=lgb.train,
         **kwargs
     )
-    obj.__class__ = KkBooster
+    def predict_proba(data, *args, _model=None, **kwargs):
+        output = _model.predict(data, *args, **kwargs)
+        return softmax(output)
+    obj.predict_proba = partial(predict_proba, _model=obj)
     logger.info("END")
     return obj
