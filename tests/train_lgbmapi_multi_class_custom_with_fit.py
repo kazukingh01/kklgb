@@ -14,9 +14,9 @@ if __name__ == "__main__":
     y_valid = np.random.randint(0, n_classes, n_data)
     model = KkBooster()
     model.fit(
-        x_train, y_train, params=dict(learning_rate=0.1, num_tree=10 , num_class=n_classes), 
+        x_train, y_train, params=dict(learning_rate=0.1, num_tree=20 , num_class=n_classes), 
         loss_func=CategoricalCrossEntropyLoss(n_classes=n_classes, smoothing=0.1), loss_func_eval=[Accuracy(top_k=1), ],
-        x_valid=x_valid, y_valid=y_valid
+        x_valid=x_valid, y_valid=y_valid, early_stopping_rounds=10, early_stopping_name=1
     )
     """
     >>> model.predict(x_valid)
