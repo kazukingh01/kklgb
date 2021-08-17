@@ -113,8 +113,8 @@ class CategoricalCrossEntropyLoss(CrossEntropyLoss):
     def __init__(self, n_classes: int, dx: float=1e-5, smoothing: float=False):
         assert (isinstance(smoothing, bool) and smoothing == False) or (isinstance(smoothing, float) and 0.0 < smoothing < 1.0)
         super().__init__(n_classes, dx=dx, target_dtype=np.int32)
-        self.name      = f"cce(smooth{round(self.smoothing, 2)})" if self.smoothing > 0.0 else "cce"
         self.smoothing = smoothing
+        self.name      = f"cce(smooth{round(self.smoothing, 2)})" if self.smoothing > 0.0 else "cce"
     def check(self, x: np.ndarray, t: np.ndarray):
         super().check(x, t)
         assert len(x.shape) == 2
