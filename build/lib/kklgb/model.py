@@ -137,8 +137,19 @@ class KkLGBMRegressor(LGBMRegressor, KkLGBMModelBase):
 class KkBooster:
     def __init__(self):
         self.booster = None
-    def fit(self, *args, **kwargs):
-        self.booster = train(*args, **kwargs)
+    def fit(
+        self, x_train: np.ndarray, y_train: np.ndarray, *args, params: dict=None,
+        loss_func: Union[str, Callable]=None, loss_func_grad: Union[str, Callable]=None, 
+        x_valid: np.ndarray=None, y_valid: np.ndarray=None, loss_func_eval: Union[str, Callable]=None, 
+        **kwargs
+    ):
+        assert params is not None
+        self.booster = train(
+            params, x_train, y_train, *args,
+            loss_func=loss_func, loss_func_grad=loss_func_grad, 
+            x_valid=x_valid, y_valid=y_valid, loss_func_eval=loss_func_evals
+            **kwargs
+        )
         self.set_parameter_after_training()
     def set_parameter_after_training(self):
         self.feature_importances_ = self.booster.feature_importance()
