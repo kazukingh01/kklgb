@@ -135,8 +135,8 @@ class KkLGBMRegressor(LGBMRegressor, KkLGBMModelBase):
 
 
 class KkBooster:
-    def __init__(self):
-        self.booster = None
+    def __init__(self, booster=None):
+        self.booster = booster
     def fit(
         self, x_train: np.ndarray, y_train: np.ndarray, *args, params: dict=None,
         loss_func: Union[str, Callable]=None, loss_func_grad: Union[str, Callable]=None, 
@@ -327,9 +327,5 @@ def train(
         func_train=lgb.train,
         **kwargs
     )
-    def predict_proba(data, *args, _model=None, **kwargs):
-        output = _model.predict(data, *args, **kwargs)
-        return softmax(output)
-    obj.predict_proba = partial(predict_proba, _model=obj)
     logger.info("END")
     return obj
