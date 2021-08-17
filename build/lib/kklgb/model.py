@@ -147,7 +147,7 @@ class KkBooster:
         self.booster = train(
             params, x_train, y_train, *args,
             loss_func=loss_func, loss_func_grad=loss_func_grad, 
-            x_valid=x_valid, y_valid=y_valid, loss_func_eval=loss_func_evals
+            x_valid=x_valid, y_valid=y_valid, loss_func_eval=loss_func_eval,
             **kwargs
         )
         self.set_parameter_after_training()
