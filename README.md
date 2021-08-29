@@ -4,7 +4,7 @@
 
 ## Installation
 ```
-pip install git+https://github.com/kazukingh01/kklgb.git
+pip install git+https://github.com/kazukingh01/kklgb.git@v1.0.1
 ```
 
 ## Training examples with using Model Zoo
