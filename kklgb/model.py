@@ -45,6 +45,7 @@ class KkLGBMModelBase(LGBMModel):
         self.save_interval       = kwargs.get("save_interval")
         self.stopping_train_val  = kwargs.get("stopping_train_val")
         self.stopping_train_iter = kwargs.get("stopping_train_iter")
+        self.stopping_train_type = kwargs.get("stopping_train_type")
         if kwargs.get("verbose") is None:
             kwargs["verbose"] = int(self.n_estimators)
         if kwargs.get("eval_set") is None:
@@ -65,7 +66,7 @@ class KkLGBMModelBase(LGBMModel):
         kwargs = set_callbacks(
             kwargs, logger, self.dict_eval, 
             early_stopping_rounds=kwargs.get("early_stopping_rounds"), dict_eval_best=self.dict_eval_best,
-            stopping_train_val=self.stopping_train_val, stopping_train_iter=self.stopping_train_iter,
+            stopping_train_val=self.stopping_train_val, stopping_train_iter=self.stopping_train_iter, stopping_train_type=self.stopping_train_type,
             save_interval=self.save_interval
         )
         self.fit_common(X, y, *argv, **kwargs)
@@ -178,7 +179,7 @@ class KkLgbDataset(Dataset):
 def set_callbacks(
     kwargs: dict, logger: MyLogger, dict_eval: dict, 
     early_stopping_rounds: int=None, eval_name: Union[int, str]=0, dict_eval_best: dict=None,
-    stopping_train_val: float=None, stopping_train_iter: int=None,
+    stopping_train_val: float=None, stopping_train_iter: int=None, stopping_train_type: str="over",
     save_interval: int=None
 ):
     assert isinstance(kwargs,    dict)
@@ -192,13 +193,13 @@ def set_callbacks(
         if isinstance(early_stopping_rounds, int) and isinstance(dict_eval_best, dict):
             logger.info(f"set callbacks: callback_best_iter. params: early_stopping_rounds={early_stopping_rounds}, eval_name={eval_name}")
             kwargs["callbacks"].append(callback_best_iter(dict_eval_best, early_stopping_rounds, eval_name, logger))
-        if isinstance(stopping_train_val, float) and isinstance(stopping_train_iter, dict):
-            logger.info(f"set callbacks: callback_stop_training. params: stopping_train_val={stopping_train_val}, stopping_train_iter={stopping_train_iter}")
-            kwargs["callbacks"].append(callback_stop_training(stopping_train_val, stopping_train_iter, logger))
+        if isinstance(stopping_train_val, float) and isinstance(stopping_train_iter, int):
+            logger.info(f"set callbacks: callback_stop_training. params: stopping_train_val={stopping_train_val}, stopping_train_iter={stopping_train_iter}, stopping_train_type={stopping_train_type}")
+            kwargs["callbacks"].append(callback_stop_training(stopping_train_val, stopping_train_iter, stopping_train_type, logger))
         if isinstance(save_interval, float):
             logger.info("set callbacks: callback_model_save")
             kwargs["callbacks"].append(callback_model_save(save_interval))
-    for x in ["save_interval", "stopping_train_val", "stopping_train_iter", "early_stopping_rounds", "early_stopping_name"]:
+    for x in ["save_interval", "stopping_train_val", "stopping_train_iter", "stopping_train_type", "early_stopping_rounds", "early_stopping_name"]:
         if kwargs.get(x) is not None: del kwargs[x]
     return kwargs
 
@@ -299,6 +300,7 @@ def _train(
         early_stopping_rounds=kwargs.get("early_stopping_rounds"), eval_name=kwargs.get("early_stopping_name"), 
         dict_eval_best=dict_eval_best,
         stopping_train_val=kwargs.get("stopping_train_val"), stopping_train_iter=kwargs.get("stopping_train_iter"),
+        stopping_train_type=kwargs.get("stopping_train_type"),
         save_interval=kwargs.get("save_interval"),
     )
     evals_result = {} # metric history

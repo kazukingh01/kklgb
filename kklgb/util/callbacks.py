@@ -19,15 +19,20 @@ def callback_model_save(save_interval: int):
     _callback.order = 110
     return _callback
 
-def callback_stop_training(stopping_val: float, stopping_rounds: int, logger: MyLogger):
+def callback_stop_training(stopping_val: float,  stopping_rounds: int, stopping_type: str, logger: MyLogger):
     """
     If training loss does not reach the threshold, it will be terminated first.
     """
+    assert isinstance(stopping_type, str) and stopping_type in ["over", "less"]
     def _callback(env):
         _, _, result, _ = env.evaluation_result_list[0]
-        if isinstance(stopping_rounds, int) and env.iteration >= stopping_rounds and result > stopping_val:
-            logger.info(f'stop training. iteration: {env.iteration}, score: {result}')
-            raise EarlyStopException(env.iteration, env.evaluation_result_list)
+        if isinstance(stopping_rounds, int) and env.iteration >= stopping_rounds:
+            if   stopping_type == "over" and result > stopping_val:
+                logger.info(f'stop training. iteration: {env.iteration}, score: {result}')
+                raise EarlyStopException(env.iteration, env.evaluation_result_list)
+            elif stopping_type == "less" and result < stopping_val:
+                logger.info(f'stop training. iteration: {env.iteration}, score: {result}')
+                raise EarlyStopException(env.iteration, env.evaluation_result_list)
     _callback.order = 150
     return _callback
 

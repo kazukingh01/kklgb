@@ -13,7 +13,8 @@ if __name__ == "__main__":
     model = train(
         dict(learning_rate=0.1, num_tree=100 , num_class=n_classes), x_train, y_train, 
         loss_func=MSELoss(n_classes=n_classes), loss_func_eval=[MAELoss(n_classes=n_classes), ],
-        x_valid=x_valid, y_valid=y_valid
+        x_valid=x_valid, y_valid=y_valid,
+        stopping_train_val=0.01, stopping_train_iter=10, stopping_train_type="less"
     )
     model.predict(x_valid)
     """
