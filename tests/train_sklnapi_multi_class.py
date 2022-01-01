@@ -1,6 +1,6 @@
 import numpy as np
 
-from kklgb.model import train, KkLGBMClassifier
+from kklgb.model import KkLGBMClassifier
 
 
 if __name__ == "__main__":
