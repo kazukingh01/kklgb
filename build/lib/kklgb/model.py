@@ -5,14 +5,14 @@ import numpy as np
 from sklearn.exceptions import NotFittedError
 
 import lightgbm as lgb
-from lightgbm import LGBMClassifier, LGBMRegressor, LGBMModel, Booster, Dataset
+from lightgbm import LGBMClassifier, LGBMRegressor, LGBMModel, Dataset
 from lightgbm.callback import record_evaluation
 
 # local package
 from kklgb.loss import Loss
 from kklgb.util.functions import softmax
 from kklgb.util.lgbm import LGBCustomObjective, LGBCustomEval, calc_grad_hess
-from kklgb.util.callbacks import callback_model_save, callback_stop_training, callback_best_iter, callback_lr_schedule, print_evaluation
+from kklgb.util.callbacks import callback_model_save, callback_stop_training, callback_best_iter, print_evaluation
 from kklgb.util.com import check_type_list
 from kklgb.util.logger import set_logger, MyLogger
 logger = set_logger(__name__)
@@ -37,7 +37,8 @@ class KkLGBMModelBase(LGBMModel):
             early_stopping_rounds=50
         )
     """
-    def _fit(self, X, y, *argv, **kwargs):
+    def _fit(self, X, y, *argv, refit: int=None, **kwargs):
+        assert refit is None or (isinstance(refit, int) and refit > 0)
         logger.info("START")
         self.dict_eval      = {}
         self.dict_eval_best = {}
@@ -63,6 +64,9 @@ class KkLGBMModelBase(LGBMModel):
         else:
             if isinstance(kwargs.get("eval_names"), list):
                 kwargs["eval_names"].insert(0, "train")
+        if refit is not None:
+            self.set_params(num_iterations=refit)
+            kwargs["init_model"] = self.booster_
         kwargs = set_callbacks(
             kwargs, logger, self.dict_eval, 
             early_stopping_rounds=kwargs.get("early_stopping_rounds"), dict_eval_best=self.dict_eval_best,
@@ -99,6 +103,26 @@ class KkLGBMModelBase(LGBMModel):
         self.objective  = None
         self._objective = None
         self._fobj      = None
+    
+    def load_model(self, model_file: str, num_classes: int):
+        logger.info("START")
+        assert isinstance(model_file, str)
+        assert isinstance(num_classes, int) and num_classes > 0
+        # load lgb booster
+        logger.info(f"load model: {model_file}")
+        booster = lgb.Booster(model_file=model_file)
+        # tmp fitting to create booster_ object
+        num_iterations = 1
+        try: num_iterations = self.num_iterations
+        except AttributeError: pass
+        try: num_iterations = int(booster.num_trees() / booster.num_model_per_iteration())
+        except AttributeError: pass
+        self.set_params(num_iterations=1)
+        self.fit(np.random.rand(num_classes, booster.num_feature()), np.arange(num_classes).astype(int))
+        logger.info("override network...")
+        self.booster_.model_from_string(booster.model_to_string())
+        self.set_params(num_iterations=num_iterations)
+        logger.info("END")
 
 
 class KkLGBMClassifier(LGBMClassifier, KkLGBMModelBase):

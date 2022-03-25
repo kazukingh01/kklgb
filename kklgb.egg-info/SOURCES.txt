@@ -1,4 +1,6 @@
+.gitignore
 README.md
+build_package.sh
 setup.py
 kklgb/__init__.py
 kklgb/loss.py
@@ -15,3 +17,10 @@ kklgb/util/com.py
 kklgb/util/functions.py
 kklgb/util/lgbm.py
 kklgb/util/logger.py
+tests/train_lgbmapi_multi_class_custom.py
+tests/train_lgbmapi_multi_class_custom_with_fit.py
+tests/train_lgbmapi_multi_regression_custom.py
+tests/train_sklnapi_binary_class.py
+tests/train_sklnapi_multi_class.py
+tests/train_sklnapi_multi_class_refit.py
+tests/train_sklnapi_regression.py
