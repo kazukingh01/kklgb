@@ -44,7 +44,7 @@ class Loss:
         assert isinstance(x, np.ndarray)
         assert isinstance(t, np.ndarray)
         assert x.shape[0] == t.shape[0]
-        if self.n_classes > 0: assert x.shape[1] == self.n_classes
+        if self.n_classes > 1: assert x.shape[1] == self.n_classes
     def __call__(self, x: np.ndarray, t: np.ndarray):
         loss = self.loss(x, t)
         return self.reduction(loss)
