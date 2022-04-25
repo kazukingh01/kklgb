@@ -8,6 +8,7 @@ __all__ = [
     "Loss",
     "BinaryCrossEntropyLoss",
     "CrossEntropyLoss",
+    "CrossEntropyLossArgmax",
     "CategoricalCrossEntropyLoss",
     "FocalLoss",
     "MSELoss",
@@ -107,6 +108,31 @@ class CrossEntropyLoss(Loss):
         grad  = t_sum * x - t
         hess  = t_sum * x * (1 - x)
         return grad, hess
+
+
+class CrossEntropyLossArgmax(Loss):
+    def __init__(self, n_classes: int, dx: float=1e-5, target_dtype: np.dtype=np.float32):
+        assert isinstance(n_classes, int) and n_classes > 1
+        super().__init__("cemax", n_classes=n_classes, target_dtype=target_dtype, is_higher_better=False)
+        self.dx = dx
+        self.conv_t_sum = lambda x: 1.0
+        self.indexes    = None
+    def check(self, x: np.ndarray, t: np.ndarray):
+        super().check(x, t)
+        if self.name == "cemax":
+            assert len(x.shape) == 2
+            assert len(t.shape) == 2
+            assert x.shape[1] == t.shape[1] == self.n_classes
+            self.indexes = np.arange(t.shape[0], dtype=int)
+    def loss(self, x: np.ndarray, t: np.ndarray):
+        x, t = self.convert(x, t)
+        t = np.argmax(t, axis=1)
+        x = softmax(x)
+        x = np.clip(x, self.dx, 1 - self.dx * (self.n_classes - 1))
+        x = x[np.arange(t.shape[0], dtype=int), t]
+        return (-1 * np.log(x))
+    def gradhess(self, x: np.ndarray, t: np.ndarray):
+        raise Exception(f"class: {self.__class__.__name__} has not gradient and hessian.")
 
 
 class CategoricalCrossEntropyLoss(CrossEntropyLoss):
