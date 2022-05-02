@@ -1,5 +1,4 @@
 import numpy as np
-from typing import Callable
 
 from kklgb.util.functions import sigmoid, softmax
 
@@ -14,6 +13,8 @@ __all__ = [
     "MSELoss",
     "MAELoss",
     "HuberLoss",
+    "Accuracy",
+    "LogitMarginL1Loss",
 ]
 
 
@@ -121,12 +122,14 @@ class CrossEntropyLossArgmax(Loss):
         super().check(x, t)
         if self.name == "cemax":
             assert len(x.shape) == 2
-            assert len(t.shape) == 2
-            assert x.shape[1] == t.shape[1] == self.n_classes
+            assert len(t.shape) in [1, 2]
+            if len(t.shape) == 2: assert x.shape[1] == t.shape[1] == self.n_classes
+            else:                 assert x.shape[1] == self.n_classes
             self.indexes = np.arange(t.shape[0], dtype=int)
     def loss(self, x: np.ndarray, t: np.ndarray):
         x, t = self.convert(x, t)
-        t = np.argmax(t, axis=1)
+        if len(t.shape) == 2: t = np.argmax(t, axis=1)
+        else:                 t = t.astype(np.int32)
         x = softmax(x)
         x = np.clip(x, self.dx, 1 - self.dx * (self.n_classes - 1))
         x = x[np.arange(t.shape[0], dtype=int), t]
@@ -263,3 +266,49 @@ class Accuracy(Loss):
         return (x == t.reshape(-1, 1)).sum(axis=1)
     def gradhess(self, x: np.ndarray, t: np.ndarray):
         raise Exception(f"class: {self.__class__.__name__} has not gradient and hessian.")
+
+
+class LogitMarginL1Loss(Loss):
+    def __init__(
+        self, n_classes: int, alpha: float=0.1, margin: float=10.0, 
+        dx: float=1e-5, target_dtype: np.dtype=np.float32
+    ):
+        """
+        https://arxiv.org/pdf/2111.15430.pdf
+        https://github.com/by-liu/MbLS/blob/167c0267b7a0ae29b255d44af0589a88af4d2410/calibrate/losses/logit_margin_l1.py
+        """
+        assert isinstance(n_classes, int) and n_classes > 1
+        assert isinstance(alpha,  float) and alpha  > 0
+        assert isinstance(margin, float) and margin > 0
+        self.alpha  = alpha
+        self.margin = margin
+        super().__init__(f"ce_margin_{self.alpha}_{self.margin}", n_classes=n_classes, target_dtype=target_dtype, is_higher_better=False)
+        self.dx = dx
+        self.conv_t_sum = lambda x: 1.0
+    def check(self, x: np.ndarray, t: np.ndarray):
+        super().check(x, t)
+        assert len(x.shape) == 2
+        assert len(t.shape) == 2
+        assert x.shape[1] == t.shape[1] == self.n_classes
+        if ((t.sum(axis=1) / self.dx).round(0).astype(np.int32) == int(round(1 / self.dx, 0))).sum() != t.shape[0]:
+            # If the sum of "t" is not equal to 1 (In other words, if "t" is not a probability)
+            self.conv_t_sum = lambda x: x.sum(axis=1).reshape(-1, 1)
+    def loss(self, x: np.ndarray, t: np.ndarray):
+        x, t = self.convert(x, t)
+        x_margin = np.clip(np.max(x, axis=1).reshape(-1, 1) - x - self.margin, 0.0, None)
+        x = softmax(x)
+        x = np.clip(x, self.dx, 1 - self.dx * (self.n_classes - 1))
+        loss_ce     = (-1 * t * np.log(x)).sum(axis=1)
+        loss_margin = self.alpha * np.sum(x_margin, axis=1)
+        return loss_ce + loss_margin
+    def gradhess(self, x: np.ndarray, t: np.ndarray):
+        x, t = self.convert(x, t)
+        x_margin = np.max(x, axis=1).reshape(-1, 1) - x - self.margin
+        x_margin = (x_margin > 0).astype(x.dtype)
+        x_margin[np.arange(x_margin.shape[0]), np.argmax(x, axis=1)] = 0
+        x = softmax(x)
+        x = np.clip(x, self.dx, 1 - self.dx * (self.n_classes - 1))
+        t_sum = self.conv_t_sum(t)
+        grad  = t_sum * x - t - (self.alpha * x_margin)
+        hess  = t_sum * x * (1 - x)
+        return grad, hess
