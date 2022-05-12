@@ -2,7 +2,6 @@ from typing import Callable
 import numpy as np
 import lightgbm as lgb
 from scipy.misc import derivative
-from functools import partial
 
 
 __all__ = [

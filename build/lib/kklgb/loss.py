@@ -1,5 +1,6 @@
 import numpy as np
-
+from typing import List
+from kklgb.util.com import check_type_list
 from kklgb.util.functions import sigmoid, softmax
 
 
@@ -15,6 +16,9 @@ __all__ = [
     "HuberLoss",
     "Accuracy",
     "LogitMarginL1Loss",
+    "MultiTaskLoss",
+    "MultiTaskEvalLoss",
+    "CrossEntropyNDCGLoss",
 ]
 
 
@@ -312,3 +316,99 @@ class LogitMarginL1Loss(Loss):
         grad  = t_sum * x - t - (self.alpha * x_margin)
         hess  = t_sum * x * (1 - x)
         return grad, hess
+
+
+class MultiTaskLoss(Loss):
+    def __init__(self, losses: List[Loss], target_dtype: np.dtype=np.float32, weight: List[float]=None):
+        assert check_type_list(losses, Loss)
+        if weight is None: weight = [1.0] * len(losses)
+        assert check_type_list(weight, float)
+        indexes_loss = np.cumsum([x.n_classes for x in losses])
+        super().__init__(f"multi_loss", n_classes=int(indexes_loss[-1]), target_dtype=target_dtype, is_higher_better=False)
+        self.indexes_loss = indexes_loss
+        self.losses       = losses
+        self.weight       = weight
+    def check(self, x: np.ndarray, t: np.ndarray):
+        assert x.shape == t.shape
+        super().check(x, t)
+    def convert(self, x: np.ndarray, t: np.ndarray):
+        t = t.astype(self.target_dtype)
+        if self.is_check:
+            self.check(x, t)
+            self.is_check = False
+        x = np.hsplit(x, self.indexes_loss[:-1])
+        t = np.hsplit(t, self.indexes_loss[:-1])
+        return x, t
+    def loss(self, x: np.ndarray, t: np.ndarray):
+        loss = np.zeros(x.shape[0], dtype=float)
+        x, t = self.convert(x, t)
+        for _x, _t, loss_func, _w in zip(x, t, self.losses, self.weight):
+            loss += _w * loss_func.loss(_x, _t)
+        return loss
+    def gradhess(self, x: np.ndarray, t: np.ndarray):
+        x, t = self.convert(x, t)
+        list_grad, list_hess = [], []
+        for _x, _t, loss_func, _w in zip(x, t, self.losses, self.weight):
+            grad, hess = loss_func.gradhess(_x, _t)
+            grad, hess = _w * grad, _w * hess
+            list_grad.append(grad)
+            list_hess.append(hess)
+        return np.concatenate(list_grad, axis=1), np.concatenate(list_hess, axis=1)
+
+
+class MultiTaskEvalLoss(Loss):
+    def __init__(self, loss_func: Loss, indexes_loss: List[int]):
+        assert isinstance(loss_func, Loss)
+        assert check_type_list(indexes_loss, int)
+        super().__init__(loss_func.name, n_classes=loss_func.n_classes, target_dtype=loss_func.target_dtype, is_higher_better=loss_func.is_higher_better)
+        self.loss_func    = loss_func
+        self.indexes_loss = indexes_loss
+    def check(self, x: np.ndarray, t: np.ndarray):
+        assert x.shape == t.shape
+    def convert(self, x: np.ndarray, t: np.ndarray):
+        if self.is_check:
+            self.check(x, t)
+            self.is_check = False
+        x, t = x[:, self.indexes_loss], t[:, self.indexes_loss]
+        return x, t
+    def loss(self, x: np.ndarray, t: np.ndarray):
+        x, t = self.convert(x, t)
+        return self.loss_func.loss(x, t)
+    def gradhess(self, x: np.ndarray, t: np.ndarray):
+        raise Exception(f"class: {self.__class__.__name__} has not gradient and hessian.")
+
+
+class CrossEntropyNDCGLoss(Loss):
+    def __init__(self, n_classes: int, eta: List[float]=None):
+        """
+        https://arxiv.org/pdf/1911.09798.pdf
+        """
+        super().__init__("xendcg", n_classes=n_classes, target_dtype=np.float32, is_higher_better=True)
+        if eta is not None:
+            assert check_type_list(eta, [float, int])
+            self.eta = np.array(eta).astype(float)
+        else:
+            self.eta = 0.0
+    def check(self, x: np.ndarray, t: np.ndarray):
+        assert x.shape == t.shape
+        if isinstance(self.eta, np.ndarray):
+            assert x.shape[-1] == self.eta.shape[-1]
+        super().check(x, t)
+    def loss(self, x: np.ndarray, t: np.ndarray):
+        x, t = self.convert(x, t)
+        return self.NDCG(x, t)
+    def gradhess(self, x: np.ndarray, t: np.ndarray):
+        x, t = self.convert(x, t)
+        ro   = softmax(x)
+        phi  = np.power(2, t) - self.eta
+        phi  = phi / phi.sum(axis=1).reshape(-1, 1)
+        grad = -phi + ro
+        hess = ro * (1 - ro)
+        return grad, hess
+    @classmethod
+    def DCG(cls, x: np.ndarray, t: np.ndarray):
+        x_rank = (np.argsort(np.argsort(-x, axis=-1), axis=1) + 1)
+        return ((np.power(2, t) - 1) / np.log2(1 + x_rank)).sum(axis=1)
+    @classmethod
+    def NDCG(cls, x: np.ndarray, t: np.ndarray):
+        return __class__.DCG(x, t) / __class__.DCG(t, t)

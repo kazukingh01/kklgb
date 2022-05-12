@@ -1,3 +1,4 @@
+import time
 from typing import List, Union
 from lightgbm.callback import EarlyStopException, _format_eval_result
 from kklgb.util.logger import MyLogger
@@ -19,13 +20,19 @@ def callback_model_save(save_interval: int):
     _callback.order = 110
     return _callback
 
-def callback_stop_training(stopping_val: float,  stopping_rounds: int, stopping_type: str, logger: MyLogger):
+def callback_stop_training(dict_train: dict, stopping_val: float, stopping_rounds: int, stopping_type: str, stopping_train_time: int, logger: MyLogger):
     """
     If training loss does not reach the threshold, it will be terminated first.
     """
     assert isinstance(stopping_type, str) and stopping_type in ["over", "less"]
+    def _init(env):
+        dict_train["time"] = time.time()
     def _callback(env):
+        if not dict_train: _init(env)
         _, _, result, _ = env.evaluation_result_list[0]
+        if isinstance(stopping_train_time, int) and ((time.time() - dict_train["time"]) > stopping_train_time):
+            logger.info(f'stop training. iteration: {env.iteration}, score: {result}')
+            raise EarlyStopException(env.iteration, env.evaluation_result_list)
         if isinstance(stopping_rounds, int) and env.iteration >= stopping_rounds:
             if   stopping_type == "over" and result > stopping_val:
                 logger.info(f'stop training. iteration: {env.iteration}, score: {result}')
@@ -33,6 +40,7 @@ def callback_stop_training(stopping_val: float,  stopping_rounds: int, stopping_
             elif stopping_type == "less" and result < stopping_val:
                 logger.info(f'stop training. iteration: {env.iteration}, score: {result}')
                 raise EarlyStopException(env.iteration, env.evaluation_result_list)
+        dict_train["time"] = time.time()
     _callback.order = 150
     return _callback
 
@@ -46,8 +54,7 @@ def callback_best_iter(dict_eval: dict, stopping_rounds: int, name: Union[str, i
         dict_eval["best_score"] = None
         dict_eval["best_result_list"] = []
     def _callback(env):
-        if not dict_eval:
-            _init(env)
+        if not dict_eval: _init(env)
         count = -1
         for data_name, eval_name, result, is_higher_better in env.evaluation_result_list:
             if data_name == "valid0":
@@ -63,7 +70,7 @@ def callback_best_iter(dict_eval: dict, stopping_rounds: int, name: Union[str, i
                             dict_eval["best_iter"]  = env.iteration
                             dict_eval["best_result_list"] = env.evaluation_result_list
                     break
-        if isinstance(stopping_rounds, int) and env.iteration - dict_eval["best_iter"] >= stopping_rounds:
+        if isinstance(stopping_rounds, int) and ((env.iteration - dict_eval["best_iter"]) >= stopping_rounds):
             logger.info(f'early stopping. iteration: {dict_eval["best_iter"]}, score: {dict_eval["best_score"]}')
             raise EarlyStopException(dict_eval["best_iter"], dict_eval["best_result_list"])
     _callback.order = 200
