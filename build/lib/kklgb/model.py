@@ -1,4 +1,4 @@
-from typing import Callable, Union
+from typing import Callable, Union, List
 from functools import partial
 import numpy as np
 from sklearn.exceptions import NotFittedError
@@ -21,6 +21,7 @@ __all__ = [
     "KkLGBMModelBase",
     "KkLGBMClassifier",
     "KkLGBMRegressor",
+    "KkBooster",
     "_train",
     "train",
 ]
@@ -160,8 +161,12 @@ class KkLGBMRegressor(LGBMRegressor, KkLGBMModelBase):
 
 
 class KkBooster:
-    def __init__(self, booster=None):
-        self.booster = booster
+    def __init__(self, booster=None, indexes: List[int]=None, is_softmax: bool=False):
+        if indexes is not None: assert check_type_list(indexes, int)
+        assert isinstance(is_softmax, bool)
+        self.booster    = booster
+        self.indexes    = indexes
+        self.is_softmax = is_softmax
     def fit(
         self, x_train: np.ndarray, y_train: np.ndarray, *args, params: dict=None,
         loss_func: Union[str, Callable]=None, loss_func_grad: Union[str, Callable]=None, 
@@ -180,11 +185,15 @@ class KkBooster:
         self.feature_importances_ = self.booster.feature_importance()
         if self.booster.params.get("num_class") is not None:
             self.classes_ = np.arange(self.booster.params.get("num_class"))
-    def predict(self, data, *args, **kwargs):
-        return self.booster.predict(data, *args, **kwargs)
-    def predict_proba(self, data, *args, **kwargs):
+    def predict(self, data, *args, indexes: List[int]=None, is_softmax: bool=None, **kwargs):
         output = self.booster.predict(data, *args, **kwargs)
-        return softmax(output)
+        if indexes    is None: indexes    = self.indexes
+        if is_softmax is None: is_softmax = self.is_softmax
+        if indexes is not None:
+            output = output[:, indexes]
+        if is_softmax:
+            output = softmax(output)
+        return output
 
 
 class KkLgbDataset(Dataset):
