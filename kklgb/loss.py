@@ -383,7 +383,7 @@ class CrossEntropyNDCGLoss(Loss):
         """
         https://arxiv.org/pdf/1911.09798.pdf
         """
-        super().__init__("xendcg", n_classes=n_classes, target_dtype=np.float32, is_higher_better=True)
+        super().__init__("xendcg", n_classes=n_classes, target_dtype=np.float32, is_higher_better=False)
         if eta is not None:
             assert check_type_list(eta, [float, int])
             self.eta = np.array(eta).astype(float)
@@ -396,7 +396,7 @@ class CrossEntropyNDCGLoss(Loss):
         super().check(x, t)
     def loss(self, x: np.ndarray, t: np.ndarray):
         x, t = self.convert(x, t)
-        return self.NDCG(x, t)
+        return 1 - self.NDCG(x, t)
     def gradhess(self, x: np.ndarray, t: np.ndarray):
         x, t = self.convert(x, t)
         ro   = softmax(x)

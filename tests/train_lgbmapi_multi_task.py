@@ -1,22 +1,34 @@
 import numpy as np
 
 from kklgb.model import train
-from kklgb.util.functions import softmax
-from kklgb.loss import CrossEntropyLoss, Accuracy, MultiTaskLoss, MultiTaskEvalLoss
+from kklgb.loss import CrossEntropyLoss, MultiTaskLoss, MultiTaskEvalLoss, CrossEntropyNDCGLoss
 
 if __name__ == "__main__":
     n_data    = 1000
     n_classes = 10
     x_train = np.random.rand(n_data, 100)
     x_valid = np.random.rand(n_data, 100)
-    # CategoricalCrossEntropyLoss with smoothing
-    y_train = np.eye(n_classes)[np.random.randint(0, 2, n_data)]
-    y_valid = np.eye(n_classes)[np.random.randint(0, n_classes, n_data)]
+    y_train = np.concatenate(
+        [
+              np.eye(3)[np.random.randint(0, 3, n_data)],
+              np.argsort(np.random.rand(n_data, n_classes - 3)) + 1,
+        ], axis=1
+    ).astype(float)
+    y_valid = np.concatenate(
+        [
+              np.eye(3)[np.random.randint(0, 3, n_data)],
+              np.argsort(np.random.rand(n_data, n_classes - 3)) + 1,
+        ], axis=1
+    ).astype(float)
     model = train(
-        dict(learning_rate=0.1, num_tree=2 , num_class=n_classes, n_jobs=1), x_train, y_train, 
-        loss_func=MultiTaskLoss([CrossEntropyLoss(n_classes=3), CrossEntropyLoss(n_classes=n_classes-3)]),
+        dict(learning_rate=0.1, num_tree=50, num_class=n_classes, n_jobs=1), x_train, y_train, 
+        loss_func=MultiTaskLoss([
+            CrossEntropyLoss(n_classes=3),
+            CrossEntropyNDCGLoss(n_classes=n_classes-3),
+        ]),
         loss_func_eval=[
-            MultiTaskEvalLoss(Accuracy(top_k=1), [i for i in range(0,3)]), MultiTaskEvalLoss(Accuracy(top_k=1), [i for i in range(3,n_classes)]),
+            MultiTaskEvalLoss(CrossEntropyLoss(n_classes=3), [i for i in range(0,3)]),
+            MultiTaskEvalLoss(CrossEntropyNDCGLoss(n_classes=n_classes-3), [i for i in range(3,n_classes)]),
         ], x_valid=x_valid, y_valid=y_valid
     )
     """
