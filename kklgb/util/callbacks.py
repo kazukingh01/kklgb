@@ -64,7 +64,7 @@ def callback_best_iter(dict_eval: dict, stopping_rounds: int, name: Union[str, i
                         dict_eval["best_score"] = result
                     else:
                         boolwk = result > dict_eval["best_score"] if is_higher_better else dict_eval["best_score"] > result
-                        if boolwk:
+                        if boolwk or (env.iteration <= 1):
                             dict_eval["best_score"] = result
                             dict_eval["eval_name"]  = eval_name
                             dict_eval["best_iter"]  = env.iteration
