@@ -10,7 +10,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name='kklgb',
-    version='1.0.3',
+    version='1.0.4',
     description='lightgbm wrapper library.',
     long_description=long_description,
     long_description_content_type="text/markdown",

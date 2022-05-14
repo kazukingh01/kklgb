@@ -162,7 +162,6 @@ class KkLGBMRegressor(LGBMRegressor, KkLGBMModelBase):
 
 class KkBooster:
     def __init__(self, booster=None, is_softmax: bool=False):
-        if indexes is not None: assert check_type_list(indexes, int)
         assert isinstance(is_softmax, bool)
         self.booster    = booster
         self.is_softmax = is_softmax
