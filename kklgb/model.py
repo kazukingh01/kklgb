@@ -161,11 +161,10 @@ class KkLGBMRegressor(LGBMRegressor, KkLGBMModelBase):
 
 
 class KkBooster:
-    def __init__(self, booster=None, indexes: List[int]=None, is_softmax: bool=False):
+    def __init__(self, booster=None, is_softmax: bool=False):
         if indexes is not None: assert check_type_list(indexes, int)
         assert isinstance(is_softmax, bool)
         self.booster    = booster
-        self.indexes    = indexes
         self.is_softmax = is_softmax
     def fit(
         self, x_train: np.ndarray, y_train: np.ndarray, *args, params: dict=None,
@@ -185,12 +184,9 @@ class KkBooster:
         self.feature_importances_ = self.booster.feature_importance()
         if self.booster.params.get("num_class") is not None:
             self.classes_ = np.arange(self.booster.params.get("num_class"))
-    def predict(self, data, *args, indexes: List[int]=None, is_softmax: bool=None, **kwargs):
+    def predict(self, data, *args, is_softmax: bool=None, **kwargs):
         output = self.booster.predict(data, *args, **kwargs)
-        if indexes    is None: indexes    = self.indexes
         if is_softmax is None: is_softmax = self.is_softmax
-        if indexes is not None:
-            output = output[:, indexes]
         if is_softmax:
             output = softmax(output)
         return output
