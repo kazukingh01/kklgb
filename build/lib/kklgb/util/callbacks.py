@@ -1,6 +1,7 @@
 import time
 from typing import List, Union
 from lightgbm.callback import EarlyStopException, _format_eval_result
+from kklgb.util.com import check_type
 from kklgb.util.logger import MyLogger
 
 
@@ -30,7 +31,7 @@ def callback_stop_training(dict_train: dict, stopping_val: float, stopping_round
     def _callback(env):
         if not dict_train: _init(env)
         _, _, result, _ = env.evaluation_result_list[0]
-        if isinstance(stopping_train_time, int) and ((time.time() - dict_train["time"]) > stopping_train_time):
+        if check_type(stopping_train_time, [int, float]) and ((time.time() - dict_train["time"]) > stopping_train_time):
             logger.info(f'stop training. iteration: {env.iteration}, score: {result}')
             raise EarlyStopException(env.iteration, env.evaluation_result_list)
         if isinstance(stopping_rounds, int) and env.iteration >= stopping_rounds:
